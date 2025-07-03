@@ -508,6 +508,7 @@ class OptimizedTrainer:
                        batch_size: int = 16,
                        num_workers: int = 4,
                        files_per_batch: int = 3,
+                       max_swaths_per_file: int = 300,
                        save_path: str = "best_model.pth"):
         """Optimized training with batched file loading"""
 
@@ -540,7 +541,7 @@ class OptimizedTrainer:
                         preprocessor,
                         degradation_scale=8,
                         augment=True,
-                        max_swaths_in_memory=args.max_swaths_per_file
+                        max_swaths_in_memory=max_swaths_per_file
                     )
                     if len(dataset) > 0:
                         datasets.append(dataset)
@@ -788,6 +789,7 @@ def main():
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             files_per_batch=args.files_per_batch,
+            max_swaths_per_file=args.max_swaths_per_file,
             save_path=args.save_path
         )
 

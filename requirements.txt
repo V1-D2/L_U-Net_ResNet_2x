@@ -1,40 +1,15 @@
-# Core dependencies
-torch>=2.0.0
-torchvision>=0.15.0
-numpy>=1.21.0,<1.24.0  # Avoid compatibility issues with newer versions
+# Essential packages only - Python 3.12 compatible
+torch==2.1.0
+torchvision==0.16.0
+numpy>=1.21.0,<1.24.0
 matplotlib>=3.5.0
 scikit-learn>=1.0.0
 tqdm>=4.60.0
-Pillow>=8.0.0
+Pillow>=9.0.0
 psutil>=5.8.0
 
-# Data handling
-h5py>=3.0.0  # For HDF5 file handling
-pandas>=1.3.0  # For data analysis and CSV operations
-scipy>=1.7.0  # For scientific computing
-
-# Visualization and monitoring
-tensorboard>=2.10.0  # For training visualization
-tensorboardX>=2.2  # Alternative tensorboard writer
-wandb>=0.12.0  # Weights & Biases for experiment tracking (optional)
-matplotlib-inline>=0.1.3  # For Jupyter compatibility
-
-# Image processing
-opencv-python-headless>=4.5.0  # For advanced image operations
-albumentations>=1.0.0  # For data augmentation (optional)
-
-# Utilities
-pyyaml>=5.4.1  # For config file handling
-python-dotenv>=0.19.0  # For environment variables
-argparse>=1.4.0  # Usually included, but good to specify
-
-# Performance optimization
-numba>=0.54.0  # For JIT compilation (optional)
-einops>=0.4.0  # For tensor operations (optional)
-
-# Development tools (optional)
-ipython>=7.30.0  # For interactive development
-jupyter>=1.0.0  # For notebooks
-pytest>=6.2.0  # For testing
-black>=21.0  # For code formatting
-flake8>=4.0.0  # For linting
+# Note: Avoid these packages if using Python 3.12:
+# - wandb (has setuptools issues)
+# - tensorboard (dependency conflicts)
+# - opencv-python (build issues)
+# - albumentations (dependency chain issues)
