@@ -140,11 +140,11 @@ class OptimizedAMSR2Dataset(Dataset):
                         if valid_ratio < 0.5:
                             continue
 
-                        # Make contiguous and preprocess
+                        # Make contiguous copy
                         temperature = np.ascontiguousarray(temperature)
                         temperature = self.preprocessor.crop_and_pad_to_target(temperature)
                         temperature = self.preprocessor.normalize_brightness_temperature(temperature)
-                        temperature = np.ascontiguousarray(temperature)
+                        temperature = np.ascontiguousarray(temperature)  # This ensures it's contiguous
 
                         # Cache preprocessed data
                         self.data_cache.append(temperature)
@@ -174,13 +174,17 @@ class OptimizedAMSR2Dataset(Dataset):
         # Augmentation
         if self.augment and np.random.rand() > 0.7:
             if np.random.rand() > 0.5:
-                temperature = np.fliplr(temperature)
+                temperature = np.fliplr(temperature).copy()  # Add .copy()
             if np.random.rand() > 0.5:
-                temperature = np.flipud(temperature)
+                temperature = np.flipud(temperature).copy()  # Add .copy()
 
         # Fast downscaling
         high_res = temperature
         low_res = self._fast_downscale(high_res)
+
+        # Make sure arrays are contiguous before converting to tensors
+        high_res = np.ascontiguousarray(high_res)  # Add this line
+        low_res = np.ascontiguousarray(low_res)  # Add this line
 
         # Convert to tensors
         high_res_tensor = torch.from_numpy(high_res).unsqueeze(0).float()
