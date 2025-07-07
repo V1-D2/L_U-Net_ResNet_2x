@@ -88,7 +88,7 @@ apptainer exec --nv \
     --batch-size 32 \
     --num-workers 3 \
     --files-per-batch 8 \
-    --max-swaths-per-file 5000 \
+    --max-swaths-per-file 3000 \
     --gradient-accumulation 4 \
     --lr 5e-5 \
     --save-path ./models/best_amsr2_2x_1st.pth
