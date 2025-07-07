@@ -5,8 +5,8 @@
 #SBATCH --partition=salvador
 #SBATCH --gres=gpu:turing:1
 #SBATCH --cpus-per-gpu=12
-#SBATCH --mem-per-gpu=32G
-#SBATCH --time=48:00:00
+#SBATCH --mem-per-gpu=64G
+#SBATCH --time=72:00:00
 
 echo "============================================"
 echo "AMSR2 Minimal Training Started: $(date)"
@@ -84,14 +84,14 @@ apptainer exec --nv \
     python gpu_sequential_amsr2_optimized.py \
     --npz-dir /data \
     --max-files 4 \
-    --epochs 20 \
+    --epochs 50 \
     --batch-size 12 \
     --num-workers 3 \
-    --files-per-batch 2 \
-    --max-swaths-per-file 200 \
-    --gradient-accumulation 2 \
-    --lr 1e-4 \
-    --save-path ./models/best_amsr2_8x.pth
+    --files-per-batch 8 \
+    --max-swaths-per-file 10000 \
+    --gradient-accumulation 4 \
+    --lr 5e-5 \
+    --save-path ./models/best_amsr2_8x_2nd.pth
 
 echo "============================================"
 echo "Training Finished: $(date)"

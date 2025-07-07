@@ -45,11 +45,12 @@ echo "============================================"
 echo "Testing Finished: $(date)"
 echo "============================================"
 
+
 # Check results
 if [ -f "./test_results/comparison.png" ]; then
     echo "✅ Testing completed successfully!"
     echo "Results saved in: test_results/"
-    ls -la test_results/
+    ls -la models/
 else
     echo "❌ Testing may have failed - no output files found"
 fi
