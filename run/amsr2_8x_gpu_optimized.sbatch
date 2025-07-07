@@ -19,7 +19,7 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=4
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-cd /home/vdidur/L_U-Net_ResNet
+cd /home/vdidur/L_U-Net_ResNet_2x
 
 # Step 1: Install ONLY essential packages
 echo "============================================"
@@ -75,7 +75,7 @@ echo "============================================"
 
 apptainer exec --nv \
     --bind $HOME/local-python:$HOME/.local \
-    --bind /home/vdidur/L_U-Net_ResNet:/workspace \
+    --bind /home/vdidur/L_U-Net_ResNet_2x:/workspace \
     --bind /home/vdidur/temperature_sr_project/data:/data:ro \
     --env PYTHONPATH=/workspace:$PYTHONPATH \
     --env OMP_NUM_THREADS=4 \
