@@ -81,7 +81,7 @@ class OptimizedAMSR2Dataset(Dataset):
     """Optimized dataset that caches all data in memory"""
 
     def __init__(self, npz_path: str, preprocessor,
-                 degradation_scale: int = 8,
+                 degradation_scale: int = 2,
                  augment: bool = True,
                  filter_orbit_type: Optional[str] = None,
                  max_swaths_in_memory: int = 300):
@@ -295,10 +295,10 @@ class UNetResNetEncoder(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(3, 2, 1)
 
-        self.layer1 = self._make_layer(64, 64, 2, stride=1)
-        self.layer2 = self._make_layer(64, 128, 2, stride=2)
-        self.layer3 = self._make_layer(128, 256, 2, stride=2)
-        self.layer4 = self._make_layer(256, 512, 2, stride=2)
+        self.layer1 = self._make_layer(64, 64, 3, stride=1)
+        self.layer2 = self._make_layer(64, 128, 4, stride=2)
+        self.layer3 = self._make_layer(128, 256, 6, stride=2)
+        self.layer4 = self._make_layer(256, 512, 3, stride=2)
 
     def _make_layer(self, in_channels: int, out_channels: int, blocks: int, stride: int):
         layers = []
@@ -386,14 +386,24 @@ class UNetDecoder(nn.Module):
 
 
 class UNetResNetSuperResolution(nn.Module):
-    def __init__(self, in_channels: int = 1, out_channels: int = 1, scale_factor: int = 8):
+    def __init__(self, in_channels: int = 1, out_channels: int = 1, scale_factor: int = 2):
         super().__init__()
         self.scale_factor = scale_factor
         self.encoder = UNetResNetEncoder(in_channels)
         self.decoder = UNetDecoder(out_channels)
 
         # Progressive upsampling for 8x
-        if scale_factor > 1:
+        if scale_factor == 2:
+            self.upsampling = nn.Sequential(
+                nn.ConvTranspose2d(out_channels, 64, 4, 2, 1),  # 2x upsampling
+                nn.ReLU(inplace=True),
+                nn.Conv2d(64, 64, 3, 1, 1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(64, 32, 3, 1, 1),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(32, out_channels, 1)
+            )
+        elif scale_factor > 1:
             upsampling_layers = []
             current_scale = 1
 
@@ -512,7 +522,7 @@ class OptimizedTrainer:
                        batch_size: int = 16,
                        num_workers: int = 4,
                        files_per_batch: int = 3,
-                       max_swaths_per_file: int = 300,
+                       max_swaths_per_file: int = 4000,
                        save_path: str = "best_model.pth"):
         """Optimized training with batched file loading"""
 
@@ -543,7 +553,7 @@ class OptimizedTrainer:
                     dataset = OptimizedAMSR2Dataset(
                         file_path,
                         preprocessor,
-                        degradation_scale=8,
+                        degradation_scale=2,
                         augment=True,
                         max_swaths_in_memory=max_swaths_per_file
                     )
@@ -628,7 +638,7 @@ class OptimizedTrainer:
                         'optimizer_state_dict': self.optimizer.state_dict(),
                         'loss': self.best_loss,
                         'epoch': epoch,
-                        'scale_factor': 8
+                        'scale_factor': 2
                     }
                     torch.save(checkpoint, save_path)
                     logger.info(f"💾 Saved best model: loss={self.best_loss:.4f}")
@@ -749,7 +759,7 @@ def main():
     model = UNetResNetSuperResolution(
         in_channels=1,
         out_channels=1,
-        scale_factor=8
+        scale_factor=2
     )
 
     total_params = sum(p.numel() for p in model.parameters())

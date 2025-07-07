@@ -84,14 +84,14 @@ apptainer exec --nv \
     python gpu_sequential_amsr2_optimized.py \
     --npz-dir /data \
     --max-files 4 \
-    --epochs 50 \
-    --batch-size 12 \
+    --epochs 60 \
+    --batch-size 32 \
     --num-workers 3 \
     --files-per-batch 8 \
-    --max-swaths-per-file 10000 \
+    --max-swaths-per-file 5000 \
     --gradient-accumulation 4 \
     --lr 5e-5 \
-    --save-path ./models/best_amsr2_8x_2nd.pth
+    --save-path ./models/best_amsr2_2x_1st.pth
 
 echo "============================================"
 echo "Training Finished: $(date)"

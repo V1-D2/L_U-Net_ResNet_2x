@@ -54,7 +54,7 @@ def save_array_as_image(data_array, save_path, dpi=100):
     logger.info(f"Сохранено изображение: {save_path} ({height}x{width} пикселей)")
 
 
-def create_low_res(high_res: np.ndarray, scale: int = 8) -> np.ndarray:
+def create_low_res(high_res: np.ndarray, scale: int = 2) -> np.ndarray:
     """Create low resolution version by downsampling"""
     h, w = high_res.shape
     new_h, new_w = h // scale, w // scale
@@ -74,7 +74,7 @@ def test_model(model_path: str, test_file: str, output_dir: str, device: torch.d
 
     # Load model
     logger.info(f"Loading model from: {model_path}")
-    model = UNetResNetSuperResolution(in_channels=1, out_channels=1, scale_factor=8)
+    model = UNetResNetSuperResolution(in_channels=1, out_channels=1, scale_factor=2)
 
     # Load checkpoint - use weights_only=False for compatibility
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
@@ -141,7 +141,7 @@ def test_model(model_path: str, test_file: str, output_dir: str, device: torch.d
     temperature_normalized = preprocessor.normalize_brightness_temperature(temperature)
 
     # Create low-res version
-    low_res = create_low_res(temperature_normalized, scale=8)
+    low_res = create_low_res(temperature_normalized, scale=2)
     logger.info(f"Low-res shape: {low_res.shape}")
 
     # Prepare for model
@@ -252,8 +252,8 @@ def test_model(model_path: str, test_file: str, output_dir: str, device: torch.d
                 best_y, best_x = y, x
 
     # Extract regions
-    lr_zoom = low_res_temperature[best_y // 8:(best_y + window_size) // 8,
-              best_x // 8:(best_x + window_size) // 8]
+    lr_zoom = low_res_temperature[best_y // 2:(best_y + window_size) // 2,
+              best_x // 2:(best_x + window_size) // 2]
     sr_zoom = sr_temperature[best_y:best_y + window_size,
               best_x:best_x + window_size]
     orig_zoom = temperature_kelvin[best_y:best_y + window_size,
