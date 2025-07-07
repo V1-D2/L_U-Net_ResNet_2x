@@ -76,7 +76,7 @@ def test_model(model_path: str, test_file: str, output_dir: str, device: torch.d
     logger.info(f"Loading model from: {model_path}")
     model = UNetResNetSuperResolution(in_channels=1, out_channels=1, scale_factor=8)
 
-    # Load checkpoint
+    # Load checkpoint - use weights_only=False for compatibility
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -98,18 +98,37 @@ def test_model(model_path: str, test_file: str, output_dir: str, device: torch.d
         # Extract temperature data
         if 'temperature' in data:
             temperature = data['temperature'].astype(np.float32)
+            # Get metadata for scale factor
+            if 'metadata' in data:
+                metadata = data['metadata'].item() if hasattr(data['metadata'], 'item') else data['metadata']
+                scale_factor = metadata.get('scale_factor', 1.0)
+                temperature = temperature * scale_factor
+            else:
+                # If no metadata, assume temperature needs scaling from typical AMSR2 values
+                if np.max(temperature) > 1000:  # Likely unscaled data
+                    temperature = temperature * 0.01  # Common AMSR2 scale factor
+                metadata = {'scale_factor': 0.01}
         elif 'swath_array' in data:
             swath = data['swath_array'][0]
             if hasattr(swath, 'item'):
                 swath = swath.item()
             temperature = swath['temperature'].astype(np.float32)
+            metadata = swath.get('metadata', {})
+            scale_factor = metadata.get('scale_factor', 1.0)
+            temperature = temperature * scale_factor
         else:
             raise ValueError("No temperature data found in file")
 
-        # Get metadata if available
-        metadata = None
-        if 'metadata' in data:
-            metadata = data['metadata'].item() if hasattr(data['metadata'], 'item') else data['metadata']
+        # Filter invalid temperature values
+        temperature = np.where((temperature < 50) | (temperature > 350), np.nan, temperature)
+
+        # Fill NaN values with mean
+        valid_mask = ~np.isnan(temperature)
+        if np.sum(valid_mask) > 0:
+            mean_temp = np.mean(temperature[valid_mask])
+            temperature = np.where(np.isnan(temperature), mean_temp, temperature)
+        else:
+            temperature = np.full_like(temperature, 250.0)
 
     logger.info(f"Original temperature shape: {temperature.shape}")
     logger.info(f"Temperature range: [{np.nanmin(temperature):.1f}, {np.nanmax(temperature):.1f}] K")
