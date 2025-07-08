@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=test_amsr2_8x
+#SBATCH --job-name=test_amsr2_2x
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err
 #SBATCH --partition=salvador
@@ -19,7 +19,7 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS=4
 
 # Change to project directory
-cd /home/vdidur/L_U-Net_ResNet
+cd /home/vdidur/L_U-Net_ResNet_2x
 
 # Create test results directory
 mkdir -p test_results
@@ -31,13 +31,13 @@ echo "============================================"
 
 apptainer exec --nv \
     --bind $HOME/local-python:$HOME/.local \
-    --bind /home/vdidur/L_U-Net_ResNet:/workspace \
+    --bind /home/vdidur/L_U-Net_ResNet_2x:/workspace \
     --bind /home/vdidur/temperature_sr_project/test:/test_data:ro \
     --env PYTHONPATH=/workspace:$PYTHONPATH \
     --workdir /workspace \
     /home/shared/containers/tensorflow-25.02-py3.sif \
     python test_amsr2_model.py \
-    --model-path /workspace/models/best_amsr2_8x.pth \
+    --model-path /workspace/models/best_amsr2_2x_1st.pth \
     --test-file /test_data/single_amsr2_image.npz \
     --output-dir /workspace/test_results
 
