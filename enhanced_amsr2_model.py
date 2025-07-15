@@ -435,17 +435,17 @@ class EnhancedAMSR2Loss(nn.Module):
     """Enhanced loss with perceptual component and SSIM"""
 
     def __init__(self, alpha: float = 1.0, beta: float = 0.15,
-                 gamma: float = 0.05, delta: float = 0.1, epsilon: float = 0.1):
+                 gamma: float = 0.05, delta: float = 0.0, epsilon: float = 0.1):  # Set delta=0.0
         super().__init__()
         self.alpha = alpha  # L1 loss weight
         self.beta = beta  # Gradient loss weight
         self.gamma = gamma  # Physical consistency weight
-        self.delta = delta  # Perceptual loss weight
+        self.delta = delta  # Perceptual loss weight (disabled)
         self.epsilon = epsilon  # SSIM loss weight
 
         self.l1_loss = nn.L1Loss()
         self.mse_loss = nn.MSELoss()
-        self.perceptual_loss = PerceptualLoss()
+        # self.perceptual_loss = PerceptualLoss()  # Comment out
         self.metrics_calc = MetricsCalculator()
 
     def gradient_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -492,7 +492,8 @@ class EnhancedAMSR2Loss(nn.Module):
         l1_loss = self.l1_loss(pred, target)
         grad_loss = self.gradient_loss(pred, target)
         phys_loss = self.brightness_temperature_consistency(pred, target)
-        percep_loss = self.perceptual_loss(pred, target)
+        #percep_loss = self.perceptual_loss(pred, target)
+        percep_loss = torch.tensor(0.0, device=pred.device)
         ssim_loss = self.ssim_loss(pred, target)
 
         # Combined loss
