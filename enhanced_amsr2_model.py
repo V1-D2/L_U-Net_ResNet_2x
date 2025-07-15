@@ -411,14 +411,14 @@ class PerceptualLoss(nn.Module):
         super().__init__()
         # Simple feature extractor for single channel
         self.features = nn.Sequential(
-            nn.Conv2d(1, 64, 3, 1, 1),
+            nn.Conv2d(1, 64, 3, 1, 1, bias=False),  # Remove bias
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, 3, 1, 1),
+            nn.Conv2d(64, 64, 3, 1, 1, bias=False),  # Remove bias
             nn.ReLU(inplace=True),
             nn.MaxPool2d(2),
-            nn.Conv2d(64, 128, 3, 1, 1),
+            nn.Conv2d(64, 128, 3, 1, 1, bias=False),  # Remove bias
             nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, 3, 1, 1),
+            nn.Conv2d(128, 128, 3, 1, 1, bias=False),  # Remove bias
             nn.ReLU(inplace=True),
         )
 
