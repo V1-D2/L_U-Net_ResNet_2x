@@ -198,9 +198,9 @@ class MetricsCalculator:
         tensor_255 = (tensor_01 * 255.0).clamp(0, 255)
 
         if tensor_255.dim() == 4:  # Batch
-            numpy_array = tensor_255.cpu().numpy().transpose(0, 2, 3, 1)
+            numpy_array = tensor_255.detach().cpu().numpy().transpose(0, 2, 3, 1)
         elif tensor_255.dim() == 3:  # Single image
-            numpy_array = tensor_255.cpu().numpy().transpose(1, 2, 0)
+            numpy_array = tensor_255.detach().cpu().numpy().transpose(1, 2, 0)
         else:
             raise ValueError(f"Unexpected tensor dimensions: {tensor_255.shape}")
 
