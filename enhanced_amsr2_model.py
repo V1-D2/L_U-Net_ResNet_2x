@@ -250,7 +250,7 @@ class MetricsCalculator:
                        ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
 
             # Return mean SSIM value
-            return ssim_map.mean()
+            return torch.clamp(ssim_map.mean(), 0.0, 1.0)
 
     @staticmethod
     def denormalize_for_metrics(tensor: torch.Tensor) -> torch.Tensor:
@@ -258,6 +258,59 @@ class MetricsCalculator:
         return (tensor + 1.0) / 2.0
 
 
+'''class MetricsCalculator:
+    """Calculate PSNR and SSIM metrics using standard implementations"""
+    
+    @staticmethod
+    def calculate_psnr_torch(pred: torch.Tensor, target: torch.Tensor, max_val: float = 1.0) -> torch.Tensor:
+        """Calculate PSNR using standard implementation"""
+        # Convert from [-1, 1] to [0, 255]
+        pred_255 = ((pred + 1.0) * 127.5).clamp(0, 255).cpu().numpy()
+        target_255 = ((target + 1.0) * 127.5).clamp(0, 255).cpu().numpy()
+        
+        # Calculate PSNR for each image in batch
+        psnr_values = []
+        for i in range(pred_255.shape[0]):
+            psnr = calculate_psnr(
+                pred_255[i, 0],  # Remove channel dimension
+                target_255[i, 0],
+                crop_border=0,
+                input_order='HWC' if pred_255[i, 0].ndim == 2 else 'CHW',
+                test_y_channel=False
+            )
+            psnr_values.append(psnr)
+        
+        return torch.tensor(np.mean(psnr_values))
+    
+    @staticmethod
+    def calculate_ssim_torch(pred: torch.Tensor, target: torch.Tensor, window_size: int = 11) -> torch.Tensor:
+        """Calculate SSIM using standard implementation"""
+        # Convert from [-1, 1] to [0, 255]
+        pred_255 = ((pred + 1.0) * 127.5).clamp(0, 255).cpu().numpy()
+        target_255 = ((target + 1.0) * 127.5).clamp(0, 255).cpu().numpy()
+        
+        # Calculate SSIM for each image in batch
+        ssim_values = []
+        for i in range(pred_255.shape[0]):
+            # Add channel dimension if needed
+            pred_img = pred_255[i, 0, :, :, np.newaxis]
+            target_img = target_255[i, 0, :, :, np.newaxis]
+            
+            ssim = calculate_ssim(
+                pred_img,
+                target_img,
+                crop_border=0,
+                input_order='HWC',
+                test_y_channel=False
+            )
+            ssim_values.append(ssim)
+        
+        return torch.tensor(np.mean(ssim_values))
+    
+    @staticmethod
+    def denormalize_for_metrics(tensor: torch.Tensor) -> torch.Tensor:
+        """Convert from normalized [-1, 1] to [0, 1] range for metrics"""
+        return (tensor + 1.0) / 2.0'''
 
 
 # ====== ENHANCED MODEL ARCHITECTURE ======
