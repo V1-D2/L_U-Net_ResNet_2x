@@ -35,6 +35,7 @@ from collections import defaultdict
 import cv2
 from datetime import datetime
 from gpu_sequential_amsr2_optimized import OptimizedAMSR2Dataset, AMSR2DataPreprocessor, aggressive_cleanup
+from utils.util_calculate_psnr_ssim import calculate_psnr, calculate_ssim
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -198,40 +199,65 @@ class MetricsCalculator:
 
     @staticmethod
     def calculate_ssim_torch(pred: torch.Tensor, target: torch.Tensor, window_size: int = 11) -> torch.Tensor:
-        """Simplified SSIM calculation for single channel images"""
-        C1 = 0.01 ** 2
-        C2 = 0.03 ** 2
+        """Calculate SSIM using torchmetrics if available, else simplified version"""
+        try:
+            from torchmetrics.functional import structural_similarity_index_measure
+            # Convert from [-1, 1] to [0, 1]
+            pred_01 = (pred + 1.0) / 2.0
+            target_01 = (target + 1.0) / 2.0
+            return structural_similarity_index_measure(pred_01, target_01, data_range=1.0)
+        except ImportError:
+            # Fallback to fixed implementation
+            # First convert from [-1, 1] to [0, 1]
+            pred = (pred + 1.0) / 2.0
+            target = (target + 1.0) / 2.0
 
-        # Create Gaussian window
-        def gaussian_window(size, sigma=1.5):
-            coords = torch.arange(size, dtype=torch.float32) - size // 2
-            g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
-            g = g / g.sum()
-            return g.view(1, 1, size, 1) * g.view(1, 1, 1, size)
+            # Constants for SSIM (now correct for [0,1] range)
+            C1 = 0.01 ** 2
+            C2 = 0.03 ** 2
 
-        window = gaussian_window(window_size).to(pred.device)
+            # Create Gaussian window
+            def gaussian_window(size, sigma=1.5):
+                coords = torch.arange(size, dtype=torch.float32, device=pred.device) - size // 2
+                g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+                g = g / g.sum()
+                window = g.view(1, 1, size, 1) * g.view(1, 1, 1, size)
+                # Normalize the window
+                window = window / window.sum()
+                return window
 
-        mu1 = F.conv2d(pred, window, padding=window_size // 2)
-        mu2 = F.conv2d(target, window, padding=window_size // 2)
+            window = gaussian_window(window_size)
+            channel = pred.shape[1]
 
-        mu1_sq = mu1 ** 2
-        mu2_sq = mu2 ** 2
-        mu1_mu2 = mu1 * mu2
+            # Apply window using grouped convolution
+            mu1 = F.conv2d(pred, window.expand(channel, 1, -1, -1),
+                           padding=window_size // 2, groups=channel)
+            mu2 = F.conv2d(target, window.expand(channel, 1, -1, -1),
+                           padding=window_size // 2, groups=channel)
 
-        sigma1_sq = F.conv2d(pred ** 2, window, padding=window_size // 2) - mu1_sq
-        sigma2_sq = F.conv2d(target ** 2, window, padding=window_size // 2) - mu2_sq
-        sigma12 = F.conv2d(pred * target, window, padding=window_size // 2) - mu1_mu2
+            mu1_sq = mu1.pow(2)
+            mu2_sq = mu2.pow(2)
+            mu1_mu2 = mu1 * mu2
 
-        ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
-                   (torch.clamp(mu1_sq + mu2_sq + C1, min=1e-8) *
-                    torch.clamp(sigma1_sq + sigma2_sq + C2, min=1e-8))
+            sigma1_sq = F.conv2d(pred * pred, window.expand(channel, 1, -1, -1),
+                                 padding=window_size // 2, groups=channel) - mu1_sq
+            sigma2_sq = F.conv2d(target * target, window.expand(channel, 1, -1, -1),
+                                 padding=window_size // 2, groups=channel) - mu2_sq
+            sigma12 = F.conv2d(pred * target, window.expand(channel, 1, -1, -1),
+                               padding=window_size // 2, groups=channel) - mu1_mu2
 
-        return ssim_map.mean()
+            ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
+                       ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+
+            # Return mean SSIM value
+            return ssim_map.mean()
 
     @staticmethod
     def denormalize_for_metrics(tensor: torch.Tensor) -> torch.Tensor:
         """Convert from normalized [-1, 1] to [0, 1] range for metrics"""
         return (tensor + 1.0) / 2.0
+
+
 
 
 # ====== ENHANCED MODEL ARCHITECTURE ======
