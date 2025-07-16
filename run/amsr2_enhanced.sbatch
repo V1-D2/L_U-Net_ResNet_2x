@@ -97,7 +97,7 @@ apptainer exec --nv \
     --files-per-batch 5 \
     --max-swaths-per-file 1000 \
     --gradient-accumulation 4 \
-    --lr 2e-4 \
+    --lr 5e-5 \
     --save-dir ./models_enhanced \
     --validate-every 5 \
     --target-height 2048 \

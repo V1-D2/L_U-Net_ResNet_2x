@@ -223,7 +223,8 @@ class MetricsCalculator:
         sigma12 = F.conv2d(pred * target, window, padding=window_size // 2) - mu1_mu2
 
         ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
-                   ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+                   (torch.clamp(mu1_sq + mu2_sq + C1, min=1e-8) *
+                    torch.clamp(sigma1_sq + sigma2_sq + C2, min=1e-8))
 
         return ssim_map.mean()
 
@@ -400,6 +401,9 @@ class EnhancedUNetWithAttention(nn.Module):
         # Residual connection
         output = output + input_upsampled
 
+        # CLAMP OUTPUT to prevent explosion
+        output = torch.clamp(output, -1.5, 1.5)
+
         return output
 
 
@@ -479,13 +483,17 @@ class EnhancedAMSR2Loss(nn.Module):
         return energy_loss + 0.5 * distribution_loss + 0.1 * range_penalty
 
     def ssim_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """SSIM-based loss"""
+        # CLAMP predictions to valid range FIRST
+        pred_clamped = torch.clamp(pred, -1.0, 1.0)
+        target_clamped = torch.clamp(target, -1.0, 1.0)
+
         # Convert to [0, 1] range for SSIM calculation
-        pred_01 = self.metrics_calc.denormalize_for_metrics(pred)
-        target_01 = self.metrics_calc.denormalize_for_metrics(target)
+        pred_01 = self.metrics_calc.denormalize_for_metrics(pred_clamped)
+        target_01 = self.metrics_calc.denormalize_for_metrics(target_clamped)
 
         ssim_val = self.metrics_calc.calculate_ssim_torch(pred_01, target_01)
-        return 1.0 - ssim_val
+        # Add small epsilon to prevent log(0) issues
+        return 1.0 - torch.clamp(ssim_val, 0.0, 1.0)
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> tuple:
         # Calculate individual losses
@@ -772,11 +780,11 @@ class EnhancedTrainer:
                     if (data_idx + 1) % self.gradient_accumulation_steps == 0:
                         if self.use_amp:
                             self.scaler.unscale_(self.optimizer)
-                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                             self.scaler.step(self.optimizer)
                             self.scaler.update()
                         else:
-                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                             self.optimizer.step()
 
                         self.optimizer.zero_grad()
@@ -924,7 +932,7 @@ def main():
                         help='Number of epochs (default: 100)')
     parser.add_argument('--batch-size', type=int, default=8,
                         help='Batch size (default: 8)')
-    parser.add_argument('--lr', type=float, default=2e-4,
+    parser.add_argument('--lr', type=float, default=5e-5,
                         help='Learning rate (default: 2e-4)')
     parser.add_argument('--gradient-accumulation', type=int, default=4,
                         help='Gradient accumulation steps (default: 4)')
