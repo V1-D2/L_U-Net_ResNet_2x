@@ -190,75 +190,72 @@ class AttentionResNetBlock(nn.Module):
 
 # ====== PSNR/SSIM CALCULATION MODULE ======
 class MetricsCalculator:
-    """Calculate PSNR and SSIM metrics"""
+    """Calculate PSNR and SSIM using standard implementation from utils"""
 
     @staticmethod
-    def calculate_psnr_torch(pred: torch.Tensor, target: torch.Tensor, max_val: float = 1.0) -> torch.Tensor:
-        """Calculate PSNR using PyTorch tensors"""
-        mse = F.mse_loss(pred, target)
-        if mse == 0:
-            return torch.tensor(float('inf'))
-        return 20 * torch.log10(max_val / torch.sqrt(mse))
+    def tensor_to_uint8(tensor: torch.Tensor) -> np.ndarray:
+        tensor_01 = torch.clamp((tensor + 1.0) / 2.0, 0.0, 1.0)
+        tensor_255 = (tensor_01 * 255.0).clamp(0, 255)
+
+        if tensor_255.dim() == 4:  # Batch
+            numpy_array = tensor_255.cpu().numpy().transpose(0, 2, 3, 1)
+        elif tensor_255.dim() == 3:  # Single image
+            numpy_array = tensor_255.cpu().numpy().transpose(1, 2, 0)
+        else:
+            raise ValueError(f"Unexpected tensor dimensions: {tensor_255.shape}")
+
+        return numpy_array.astype(np.uint8)
 
     @staticmethod
-    def calculate_ssim_torch(pred: torch.Tensor, target: torch.Tensor, window_size: int = 11) -> torch.Tensor:
-        """Calculate SSIM using torchmetrics if available, else simplified version"""
-        try:
-            from torchmetrics.functional import structural_similarity_index_measure
-            # Convert from [-1, 1] to [0, 1]
-            pred_01 = (pred + 1.0) / 2.0
-            target_01 = (target + 1.0) / 2.0
-            return structural_similarity_index_measure(pred_01, target_01, data_range=1.0)
-        except ImportError:
-            # Fallback to fixed implementation
-            # First convert from [-1, 1] to [0, 1]
-            pred = (pred + 1.0) / 2.0
-            target = (target + 1.0) / 2.0
+    def calculate_psnr_batch(pred: torch.Tensor, target: torch.Tensor) -> float:
+        pred_255 = MetricsCalculator.tensor_to_uint8(pred)
+        target_255 = MetricsCalculator.tensor_to_uint8(target)
 
-            # Constants for SSIM (now correct for [0,1] range)
-            C1 = 0.01 ** 2
-            C2 = 0.03 ** 2
+        psnr_values = []
+        batch_size = pred_255.shape[0]
 
-            # Create Gaussian window
-            def gaussian_window(size, sigma=1.5):
-                coords = torch.arange(size, dtype=torch.float32, device=pred.device) - size // 2
-                g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
-                g = g / g.sum()
-                window = g.view(1, 1, size, 1) * g.view(1, 1, 1, size)
-                # Normalize the window
-                window = window / window.sum()
-                return window
+        for i in range(batch_size):
+            pred_img = pred_255[i]
+            target_img = target_255[i]
 
-            window = gaussian_window(window_size)
-            channel = pred.shape[1]
+            if pred_img.shape[-1] == 1:
+                pred_img = pred_img.squeeze(-1)[..., np.newaxis]
+                target_img = target_img.squeeze(-1)[..., np.newaxis]
 
-            # Apply window using grouped convolution
-            mu1 = F.conv2d(pred, window.expand(channel, 1, -1, -1),
-                           padding=window_size // 2, groups=channel)
-            mu2 = F.conv2d(target, window.expand(channel, 1, -1, -1),
-                           padding=window_size // 2, groups=channel)
+            try:
+                psnr = calculate_psnr(pred_img, target_img, crop_border=0, input_order='HWC')
+                if np.isinf(psnr):
+                    psnr = 100.0
+                psnr_values.append(psnr)
+            except:
+                psnr_values.append(0.0)
 
-            mu1_sq = mu1.pow(2)
-            mu2_sq = mu2.pow(2)
-            mu1_mu2 = mu1 * mu2
-
-            sigma1_sq = F.conv2d(pred * pred, window.expand(channel, 1, -1, -1),
-                                 padding=window_size // 2, groups=channel) - mu1_sq
-            sigma2_sq = F.conv2d(target * target, window.expand(channel, 1, -1, -1),
-                                 padding=window_size // 2, groups=channel) - mu2_sq
-            sigma12 = F.conv2d(pred * target, window.expand(channel, 1, -1, -1),
-                               padding=window_size // 2, groups=channel) - mu1_mu2
-
-            ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
-                       ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
-
-            # Return mean SSIM value
-            return torch.clamp(ssim_map.mean(), 0.0, 1.0)
+        return np.mean(psnr_values) if psnr_values else 0.0
 
     @staticmethod
-    def denormalize_for_metrics(tensor: torch.Tensor) -> torch.Tensor:
-        """Convert from normalized [-1, 1] to [0, 1] range for metrics"""
-        return (tensor + 1.0) / 2.0
+    def calculate_ssim_batch(pred: torch.Tensor, target: torch.Tensor) -> float:
+        pred_255 =MetricsCalculator.tensor_to_uint8(pred)
+        target_255 = MetricsCalculator.tensor_to_uint8(target)
+
+        ssim_values = []
+        batch_size = pred_255.shape[0]
+
+        for i in range(batch_size):
+            pred_img = pred_255[i]
+            target_img = target_255[i]
+
+            if pred_img.shape[-1] == 1:
+                pred_img = pred_img.squeeze(-1)[..., np.newaxis]
+                target_img = target_img.squeeze(-1)[..., np.newaxis]
+
+            try:
+                ssim = calculate_ssim(pred_img, target_img, crop_border=0, input_order='HWC')
+                ssim = np.clip(ssim, 0.0, 1.0)
+                ssim_values.append(ssim)
+            except:
+                ssim_values.append(0.0)
+
+        return np.mean(ssim_values) if ssim_values else 0.0
 
 
 '''class MetricsCalculator:
@@ -565,17 +562,14 @@ class EnhancedAMSR2Loss(nn.Module):
         return energy_loss + 0.5 * distribution_loss + 0.1 * range_penalty
 
     def ssim_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        # CLAMP predictions to valid range FIRST
         pred_clamped = torch.clamp(pred, -1.0, 1.0)
         target_clamped = torch.clamp(target, -1.0, 1.0)
 
-        # Convert to [0, 1] range for SSIM calculation
-        pred_01 = self.metrics_calc.denormalize_for_metrics(pred_clamped)
-        target_01 = self.metrics_calc.denormalize_for_metrics(target_clamped)
+        ssim_val = self.metrics_calc.calculate_ssim_batch(pred_clamped, target_clamped)
+        ssim_tensor = torch.tensor(ssim_val, device=pred.device)
+        ssim_tensor = torch.clamp(ssim_tensor, 0.0, 1.0)
 
-        ssim_val = self.metrics_calc.calculate_ssim_torch(pred_01, target_01)
-        # Add small epsilon to prevent log(0) issues
-        return 1.0 - torch.clamp(ssim_val, 0.0, 1.0)
+        return 1.0 - ssim_tensor
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> tuple:
         # Calculate individual losses
@@ -595,10 +589,11 @@ class EnhancedAMSR2Loss(nn.Module):
 
         # Calculate metrics for monitoring
         with torch.no_grad():
-            pred_01 = self.metrics_calc.denormalize_for_metrics(pred)
-            target_01 = self.metrics_calc.denormalize_for_metrics(target)
-            psnr = self.metrics_calc.calculate_psnr_torch(pred_01, target_01)
-            ssim = self.metrics_calc.calculate_ssim_torch(pred_01, target_01)
+            pred_clamped = torch.clamp(pred, -1.0, 1.0)
+            target_clamped = torch.clamp(target, -1.0, 1.0)
+
+            psnr = self.metrics_calc.calculate_psnr_batch(pred_clamped, target_clamped)
+            ssim = self.metrics_calc.calculate_ssim_batch(pred_clamped, target_clamped)
 
         return total_loss, {
             'l1_loss': l1_loss.item(),
