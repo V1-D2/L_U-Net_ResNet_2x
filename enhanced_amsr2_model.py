@@ -36,7 +36,6 @@ import cv2
 from datetime import datetime
 from gpu_sequential_amsr2_optimized import OptimizedAMSR2Dataset, AMSR2DataPreprocessor, aggressive_cleanup
 from utils.util_calculate_psnr_ssim import calculate_psnr, calculate_ssim
-
 warnings.filterwarnings('ignore', category=UserWarning)
 
 # GPU-optimized thread settings
@@ -75,20 +74,24 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
-# Setup enhanced logging
+# Setup simple logging without duplication
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Console handler with colors
-console_handler = logging.StreamHandler(sys.stdout)
-console_handler.setFormatter(ColoredFormatter('%(asctime)s - %(levelname)s - %(message)s'))
+# Clear any existing handlers to prevent duplication
+logger.handlers.clear()
 
-# File handler without colors
+# Simple console handler without colors (colors cause issues in some terminals)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+
+# File handler
 file_handler = logging.FileHandler('amsr2_enhanced_training.log')
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
+logger.propagate = False  # Prevent propagation to root logger
 
 
 # ====== SPATIAL ATTENTION MODULE ======
@@ -795,8 +798,9 @@ class EnhancedTrainer:
                 end_idx = min(start_idx + files_per_batch, len(npz_files))
                 batch_files = npz_files[start_idx:end_idx]
 
-                logger.info(f"\n📦 Batch {batch_idx + 1}/{total_batches}")
-                logger.info(f"   Loading {len(batch_files)} files...")
+                # Only log when necessary
+                if batch_idx % 5 == 0:  # Log every 5th batch
+                    logger.info(f"Processing batch {batch_idx + 1}/{total_batches}")
 
                 # Load datasets
                 datasets = []
@@ -831,12 +835,14 @@ class EnhancedTrainer:
                 self.model.train()
 
                 # Rich progress bar
+                # Simple progress bar that works better with logging
                 progress_bar = tqdm(
                     dataloader,
-                    desc=f"Batch {batch_idx + 1}/{total_batches}",
-                    ncols=120,
+                    desc=f"Epoch {epoch + 1} Batch {batch_idx + 1}/{total_batches}",
                     leave=False,
-                    bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}'
+                    disable=False,
+                    file=sys.stdout,
+                    miniters=10  # Update every 10 iterations
                 )
 
                 for data_idx, (low_res, high_res) in enumerate(progress_bar):
@@ -873,12 +879,11 @@ class EnhancedTrainer:
                         epoch_metrics[key].append(value)
 
                     # Update progress bar
-                    progress_bar.set_postfix({
-                        'Loss': f"{metrics['total_loss']:.4f}",
-                        'PSNR': f"{metrics['psnr']:.1f}",
-                        'SSIM': f"{metrics['ssim']:.3f}",
-                        'LR': f"{self.optimizer.param_groups[0]['lr']:.2e}"
-                    })
+                    if data_idx % 10 == 0:  # Update every 10 iterations
+                        progress_bar.set_postfix({
+                            'Loss': f"{metrics['total_loss']:.3f}",
+                            'PSNR': f"{metrics['psnr']:.1f}"
+                        })
 
                     # Periodic memory cleanup
                     if data_idx % 50 == 0:
@@ -903,13 +908,14 @@ class EnhancedTrainer:
             self.scheduler.step()
 
             # Log epoch summary
+            # Simple epoch summary
             epoch_time = time.time() - epoch_start_time
-            logger.info(f"\n📊 Epoch {epoch + 1} Summary:")
-            logger.info(f"   ⏱️  Time: {epoch_time:.1f}s")
-            logger.info(f"   📉 Loss: {epoch_avg_metrics['total_loss']:.4f}")
-            logger.info(f"   📈 PSNR: {epoch_avg_metrics['psnr']:.2f} dB")
-            logger.info(f"   🎯 SSIM: {epoch_avg_metrics['ssim']:.4f}")
-            logger.info(f"   🔧 LR: {epoch_avg_metrics['learning_rate']:.2e}")
+            logger.info(f"Epoch {epoch + 1:3d} | "
+                        f"Loss: {epoch_avg_metrics['total_loss']:.4f} | "
+                        f"PSNR: {epoch_avg_metrics['psnr']:.2f} dB | "
+                        f"SSIM: {epoch_avg_metrics['ssim']:.4f} | "
+                        f"Time: {epoch_time:.0f}s | "
+                        f"LR: {epoch_avg_metrics['learning_rate']:.1e}")
 
             # Save best model
             if epoch_avg_metrics['psnr'] > self.best_psnr:
