@@ -157,7 +157,7 @@ class CBAM(nn.Module):
 class AttentionResNetBlock(nn.Module):
     """ResNet block with integrated CBAM attention"""
 
-    def __init__(self, in_channels: int, out_channels: int, stride: int = 1, use_attention: bool = True):
+    def __init__(self, in_channels: int, out_channels: int, stride: int = 1, use_attention: bool = True, dropout=0.15):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
@@ -175,9 +175,12 @@ class AttentionResNetBlock(nn.Module):
         self.use_attention = use_attention
         if use_attention:
             self.cbam = CBAM(out_channels)
+        self.dropout = nn.Dropout2d(dropout)
+
 
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
+        out = self.dropout(out)
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
         out = F.relu(out)
@@ -722,7 +725,7 @@ class EnhancedTrainer:
     """Enhanced trainer with detailed progress monitoring"""
 
     def __init__(self, model: nn.Module, device: torch.device,
-                 learning_rate: float = 2e-4, weight_decay: float = 1e-5,
+                 learning_rate: float = 2e-4, weight_decay: float = 1e-3,
                  use_amp: bool = True, gradient_accumulation_steps: int = 1):
 
         self.model = model.to(device)
@@ -934,7 +937,7 @@ class EnhancedTrainer:
 
             # Periodic validation and visualization
             if (epoch + 1) % validate_every == 0:
-                self._validate_and_visualize(epoch, save_dir)
+                self._validate_and_visualize(epoch, save_dir, npz_files, preprocessor)
 
             # Save training progress plots
             if (epoch + 1) % 5 == 0:
@@ -952,34 +955,108 @@ class EnhancedTrainer:
         logger.info(f"   💾 Model saved to: {save_dir}")
         logger.info(f"{'=' * 60}")
 
-    def _validate_and_visualize(self, epoch: int, save_dir: str):
-        """Create validation visualizations"""
+    def _validate_and_visualize(self, epoch: int, save_dir: str, npz_files: List[str], preprocessor):
+        """Create validation visualizations using real data from last NPZ file"""
         self.model.eval()
 
-        # Create a simple test pattern
-        test_size = (1, 1, 256, 26)  # Scaled down for 2x SR
-        test_low = torch.randn(test_size).to(self.device)
+        # Load real samples from last NPZ file
+        last_file = npz_files[-1]
+        logger.info(f"Validating on samples from: {os.path.basename(last_file)}")
 
-        with torch.no_grad():
-            test_high = self.model(test_low)
+        samples = []
+        with np.load(last_file, allow_pickle=True) as data:
+            swath_array = data['swath_array']
+            total_swaths = len(swath_array)
 
-        # Save visualization
-        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+            # Take 3 samples from the end of file
+            for idx in range(max(0, total_swaths - 10), total_swaths):
+                try:
+                    swath = swath_array[idx].item() if hasattr(swath_array[idx], 'item') else swath_array[idx]
+                    if 'temperature' not in swath:
+                        continue
 
-        axes[0].imshow(test_low[0, 0].cpu().numpy(), cmap='turbo')
-        axes[0].set_title('Low Resolution Input')
-        axes[0].axis('off')
+                    temperature = swath['temperature'].astype(np.float32)
+                    scale_factor = swath.get('metadata', {}).get('scale_factor', 1.0)
+                    temperature = temperature * scale_factor
 
-        axes[1].imshow(test_high[0, 0].cpu().numpy(), cmap='turbo')
-        axes[1].set_title('Super Resolution Output')
-        axes[1].axis('off')
+                    # Filter and preprocess
+                    temperature = np.where((temperature < 50) | (temperature > 350), np.nan, temperature)
+                    valid_ratio = np.sum(~np.isnan(temperature)) / temperature.size
+                    if valid_ratio < 0.5:
+                        continue
 
-        plt.suptitle(f'Epoch {epoch + 1} Validation')
+                    # Preprocess
+                    temperature = preprocessor.crop_and_pad_to_target(temperature)
+                    temperature = preprocessor.normalize_brightness_temperature(temperature)
+                    samples.append(temperature)
+
+                    if len(samples) >= 3:
+                        break
+                except:
+                    continue
+
+        if not samples:
+            logger.warning("No valid samples found for validation")
+            self.model.train()
+            return
+
+        # Process samples
+        fig, axes = plt.subplots(3, len(samples), figsize=(5 * len(samples), 12))
+        if len(samples) == 1:
+            axes = axes.reshape(-1, 1)
+
+        total_psnr = 0
+        total_ssim = 0
+
+        for i, high_res in enumerate(samples):
+            # Create low-res version
+            h, w = high_res.shape
+            low_res = high_res[::2, ::2] + np.random.randn(h // 2, w // 2).astype(np.float32) * 0.01
+
+            # Convert to tensors
+            low_res_tensor = torch.from_numpy(low_res).unsqueeze(0).unsqueeze(0).float().to(self.device)
+            high_res_tensor = torch.from_numpy(high_res).unsqueeze(0).unsqueeze(0).float().to(self.device)
+
+            # Run model
+            with torch.no_grad():
+                pred_tensor = self.model(low_res_tensor)
+                pred_tensor = torch.clamp(pred_tensor, -1, 1)
+
+            # Calculate metrics
+            psnr = self.criterion.metrics_calc.calculate_psnr_batch(pred_tensor, high_res_tensor)
+            ssim = self.criterion.metrics_calc.calculate_ssim_batch(pred_tensor, high_res_tensor)
+            total_psnr += psnr
+            total_ssim += ssim
+
+            # Denormalize for visualization
+            low_res_img = low_res * 150 + 200
+            pred_img = pred_tensor.cpu().numpy()[0, 0] * 150 + 200
+            high_res_img = high_res * 150 + 200
+
+            # Plot
+            axes[0, i].imshow(low_res_img, cmap='turbo')
+            axes[0, i].set_title(f'Low Res {i + 1}')
+            axes[0, i].axis('off')
+
+            axes[1, i].imshow(pred_img, cmap='turbo')
+            axes[1, i].set_title(f'SR (PSNR: {psnr:.1f})')
+            axes[1, i].axis('off')
+
+            axes[2, i].imshow(high_res_img, cmap='turbo')
+            axes[2, i].set_title(f'Target (SSIM: {ssim:.3f})')
+            axes[2, i].axis('off')
+
+        avg_psnr = total_psnr / len(samples)
+        avg_ssim = total_ssim / len(samples)
+
+        plt.suptitle(f'Epoch {epoch + 1} Validation - Avg PSNR: {avg_psnr:.1f} dB, SSIM: {avg_ssim:.3f}')
         plt.tight_layout()
 
         viz_path = os.path.join(save_dir, f'validation_epoch_{epoch + 1}.png')
         plt.savefig(viz_path, dpi=150, bbox_inches='tight')
         plt.close()
+
+        logger.info(f"Validation - PSNR: {avg_psnr:.1f} dB, SSIM: {avg_ssim:.3f}")
 
         self.model.train()
 

@@ -99,7 +99,7 @@ apptainer exec --nv \
     --gradient-accumulation 4 \
     --lr 5e-5 \
     --save-dir ./models_enhanced \
-    --validate-every 5 \
+    --validate-every 2 \
     --target-height 2048 \
     --target-width 208 \
     --use-amp
