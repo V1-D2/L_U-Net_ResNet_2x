@@ -668,9 +668,11 @@ class TrainingHistory:
         # PSNR
         ax = axes[0, 2]
         if 'psnr' in self.history:
-            ax.plot(self.history['psnr'], 'g-', linewidth=2)
+            ax.plot(self.history['psnr'], 'g-', linewidth=2, label='Train PSNR')
+        if 'val_psnr' in self.history:
+            ax.plot(self.history['val_psnr'], 'b-', linewidth=2, label='Val PSNR')
             ax.axhline(y=self.best_metrics['psnr'], color='r', linestyle='--',
-                       label=f'Best: {self.best_metrics["psnr"]:.2f} dB')
+                       label=f'Best Val: {self.best_metrics["psnr"]:.2f} dB')
         ax.set_xlabel('Epoch')
         ax.set_ylabel('PSNR (dB)')
         ax.set_title('Peak Signal-to-Noise Ratio')
@@ -779,7 +781,14 @@ class EnhancedTrainer:
         logger.info(f"🎯 Target PSNR: 34+ dB")
         logger.info("=" * 60)
 
-        total_batches = (len(npz_files) + files_per_batch - 1) // files_per_batch
+        # Reserve last file for validation
+        train_files = npz_files[:-1]  # All except last
+        val_file = npz_files[-1]  # Last file for validation
+        total_batches = (len(train_files) + files_per_batch - 1) // files_per_batch
+
+        logger.info(f"📊 Data split:")
+        logger.info(f"   Training files: {len(train_files)}")
+        logger.info(f"   Validation file: {os.path.basename(val_file)}")
 
         # Main training loop
         for epoch in range(epochs):
@@ -793,8 +802,8 @@ class EnhancedTrainer:
             # Process files in batches
             for batch_idx in range(total_batches):
                 start_idx = batch_idx * files_per_batch
-                end_idx = min(start_idx + files_per_batch, len(npz_files))
-                batch_files = npz_files[start_idx:end_idx]
+                end_idx = min(start_idx + files_per_batch, len(train_files))
+                batch_files = train_files[start_idx:end_idx]
 
                 # Only log when necessary
                 if batch_idx % 5 == 0:  # Log every 5th batch
@@ -899,6 +908,11 @@ class EnhancedTrainer:
             # Add learning rate to metrics
             epoch_avg_metrics['learning_rate'] = self.optimizer.param_groups[0]['lr']
 
+            # Calculate validation PSNR
+            val_psnr, val_ssim = self._quick_validation(val_file, preprocessor)
+            epoch_avg_metrics['val_psnr'] = val_psnr
+            epoch_avg_metrics['val_ssim'] = val_ssim
+
             # Update history
             self.history.update(epoch_avg_metrics, epoch)
 
@@ -907,18 +921,20 @@ class EnhancedTrainer:
 
             # Log epoch summary
             # Simple epoch summary
+            # Log epoch summary
             epoch_time = time.time() - epoch_start_time
             logger.info(f"Epoch {epoch + 1:3d} | "
                         f"Loss: {epoch_avg_metrics['total_loss']:.4f} | "
-                        f"PSNR: {epoch_avg_metrics['psnr']:.2f} dB | "
-                        f"SSIM: {epoch_avg_metrics['ssim']:.4f} | "
+                        f"Train PSNR: {epoch_avg_metrics['psnr']:.2f} dB | "
+                        f"Val PSNR: {epoch_avg_metrics['val_psnr']:.2f} dB | "
+                        f"Val SSIM: {epoch_avg_metrics['val_ssim']:.4f} | "
                         f"Time: {epoch_time:.0f}s | "
                         f"LR: {epoch_avg_metrics['learning_rate']:.1e}")
 
-            # Save best model
-            if epoch_avg_metrics['psnr'] > self.best_psnr:
-                self.best_psnr = epoch_avg_metrics['psnr']
-                self.best_ssim = epoch_avg_metrics['ssim']
+            # Save best model based on validation PSNR
+            if epoch_avg_metrics['val_psnr'] > self.best_psnr:
+                self.best_psnr = epoch_avg_metrics['val_psnr']
+                self.best_ssim = epoch_avg_metrics['val_ssim']
 
                 checkpoint = {
                     'epoch': epoch,
@@ -937,7 +953,7 @@ class EnhancedTrainer:
 
             # Periodic validation and visualization
             if (epoch + 1) % validate_every == 0:
-                self._validate_and_visualize(epoch, save_dir, npz_files, preprocessor)
+                self._validate_and_visualize(epoch, save_dir, val_file, preprocessor)
 
             # Save training progress plots
             if (epoch + 1) % 5 == 0:
@@ -955,16 +971,88 @@ class EnhancedTrainer:
         logger.info(f"   💾 Model saved to: {save_dir}")
         logger.info(f"{'=' * 60}")
 
-    def _validate_and_visualize(self, epoch: int, save_dir: str, npz_files: List[str], preprocessor):
+    def _quick_validation(self, val_file: str, preprocessor, num_samples: int = 10):
+        """Quick validation on samples from last file"""
+        self.model.eval()
+
+        # Load samples from last file
+        val_psnr_list = []
+        val_ssim_list = []
+
+        try:
+            with np.load(val_file, allow_pickle=True) as data:
+                swath_array = data['swath_array']
+                total_swaths = len(swath_array)
+
+                # Take samples from end
+                sample_count = 0
+                for idx in range(total_swaths - 1, max(0, total_swaths - 50), -1):
+                    if sample_count >= num_samples:
+                        break
+
+                    try:
+                        swath = swath_array[idx].item() if hasattr(swath_array[idx], 'item') else swath_array[idx]
+                        if 'temperature' not in swath:
+                            continue
+
+                        temperature = swath['temperature'].astype(np.float32)
+                        scale_factor = swath.get('metadata', {}).get('scale_factor', 1.0)
+                        temperature = temperature * scale_factor
+
+                        # Filter and preprocess
+                        temperature = np.where((temperature < 50) | (temperature > 350), np.nan, temperature)
+                        valid_ratio = np.sum(~np.isnan(temperature)) / temperature.size
+                        if valid_ratio < 0.5:
+                            continue
+
+                        # Preprocess
+                        temperature = preprocessor.crop_and_pad_to_target(temperature)
+                        temperature = preprocessor.normalize_brightness_temperature(temperature)
+
+                        # Create low-res version
+                        h, w = temperature.shape
+                        low_res = temperature[::2, ::2] + np.random.randn(h // 2, w // 2).astype(np.float32) * 0.01
+
+                        # Convert to tensors
+                        low_res_tensor = torch.from_numpy(low_res).unsqueeze(0).unsqueeze(0).float().to(self.device)
+                        high_res_tensor = torch.from_numpy(temperature).unsqueeze(0).unsqueeze(0).float().to(
+                            self.device)
+
+                        # Run model
+                        with torch.no_grad():
+                            pred_tensor = self.model(low_res_tensor)
+                            pred_tensor = torch.clamp(pred_tensor, -1, 1)
+
+                            # Calculate metrics
+                            psnr = self.criterion.metrics_calc.calculate_psnr_batch(pred_tensor, high_res_tensor)
+                            ssim = self.criterion.metrics_calc.calculate_ssim_batch(pred_tensor, high_res_tensor)
+
+                            val_psnr_list.append(psnr)
+                            val_ssim_list.append(ssim)
+                            sample_count += 1
+
+                    except:
+                        continue
+
+        except Exception as e:
+            logger.warning(f"Validation failed: {e}")
+
+        self.model.train()
+
+        avg_val_psnr = np.mean(val_psnr_list) if val_psnr_list else 0.0
+        avg_val_ssim = np.mean(val_ssim_list) if val_ssim_list else 0.0
+
+        return avg_val_psnr, avg_val_ssim
+
+    def _validate_and_visualize(self, epoch: int, save_dir: str, val_file: str, preprocessor):
         """Create validation visualizations using real data from last NPZ file"""
         self.model.eval()
 
         # Load real samples from last NPZ file
-        last_file = npz_files[-1]
-        logger.info(f"Validating on samples from: {os.path.basename(last_file)}")
+        logger.info(f"Validating on reserved file: {os.path.basename(val_file)}")
 
         samples = []
-        with np.load(last_file, allow_pickle=True) as data:
+        with np.load(val_file, allow_pickle=True) as data:
             swath_array = data['swath_array']
             total_swaths = len(swath_array)
 

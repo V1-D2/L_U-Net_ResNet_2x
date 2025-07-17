@@ -289,6 +289,11 @@ def test_enhanced_model():
     logger.info(f"Average SSIM: {avg_ssim:.4f}")
     logger.info(f"Combined visualization: {comparison_path}")
     logger.info(f"Individual 1:1 pixel images: {individual_dir}")
+    arrays_path = os.path.join(output_dir, 'test_arrays.npz')
+    np.savez(arrays_path,
+             results=results,
+             avg_psnr=avg_psnr,
+             avg_ssim=avg_ssim)
     logger.info(f"Arrays: {arrays_path}")
     logger.info(f"\nEach test has its own folder with:")
     logger.info(f"  - low_res_HxW.png (exact pixel mapping)")
