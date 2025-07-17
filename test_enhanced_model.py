@@ -173,6 +173,7 @@ def test_enhanced_model():
     # Create visualization
     logger.info("\nCreating visualizations...")
 
+    # Create combined grid (keep the existing one)
     fig, axes = plt.subplots(3, len(results), figsize=(4 * len(results), 12))
     if len(results) == 1:
         axes = axes.reshape(-1, 1)
@@ -205,25 +206,96 @@ def test_enhanced_model():
                  fontsize=16)
     plt.tight_layout()
 
-    # Save results
+    # Save combined results
     comparison_path = os.path.join(output_dir, 'enhanced_test_results.png')
     plt.savefig(comparison_path, dpi=200, bbox_inches='tight')
     plt.close()
 
-    # Save arrays
-    arrays_path = os.path.join(output_dir, 'enhanced_test_arrays.npz')
-    np.savez(arrays_path,
-             **{f'low_res_{i}': r['low_res'] for i, r in enumerate(results)},
-             **{f'prediction_{i}': r['prediction'] for i, r in enumerate(results)},
-             **{f'ground_truth_{i}': r['ground_truth'] for i, r in enumerate(results)},
-             metrics=np.array([[r['psnr'], r['ssim']] for r in results]),
-             average_metrics=np.array([avg_psnr, avg_ssim]))
+    # CREATE INDIVIDUAL 1:1 PIXEL IMAGES
+    logger.info("Creating individual 1:1 pixel images...")
+
+    def save_array_as_1to1_image(data_array, save_path, cmap='turbo'):
+        """Save array as image with exact 1:1 pixel mapping"""
+        # Use matplotlib's imsave for exact pixel mapping
+        from matplotlib import cm
+        import matplotlib.pyplot as plt
+
+        # Normalize data to [0, 1] for colormap
+        data_min, data_max = np.min(data_array), np.max(data_array)
+        if data_max > data_min:
+            normalized = (data_array - data_min) / (data_max - data_min)
+        else:
+            normalized = np.zeros_like(data_array)
+
+        # Apply colormap and save
+        plt.imsave(save_path, normalized, cmap=cmap, origin='upper')
+
+        height, width = data_array.shape
+        logger.info(f"Saved 1:1 pixel image: {os.path.basename(save_path)} ({height}×{width} pixels)")
+
+    # Save individual images for each test
+    individual_dir = os.path.join(output_dir, 'individual_images')
+    os.makedirs(individual_dir, exist_ok=True)
+
+    for i, result in enumerate(results):
+        # Create subdirectory for each test
+        test_dir = os.path.join(individual_dir, f'test_{i + 1}_swath_{result["swath_idx"]}')
+        os.makedirs(test_dir, exist_ok=True)
+
+        # Save 1:1 pixel images
+        save_array_as_1to1_image(
+            result['low_res'],
+            os.path.join(test_dir, f'low_res_{result["low_res"].shape[0]}x{result["low_res"].shape[1]}.png')
+        )
+
+        save_array_as_1to1_image(
+            result['prediction'],
+            os.path.join(test_dir, f'enhanced_{result["prediction"].shape[0]}x{result["prediction"].shape[1]}.png')
+        )
+
+        save_array_as_1to1_image(
+            result['ground_truth'],
+            os.path.join(test_dir,
+                         f'ground_truth_{result["ground_truth"].shape[0]}x{result["ground_truth"].shape[1]}.png')
+        )
+
+        # Save difference map
+        diff = np.abs(result['prediction'] - result['ground_truth'])
+        save_array_as_1to1_image(
+            diff,
+            os.path.join(test_dir, f'difference_{diff.shape[0]}x{diff.shape[1]}.png'),
+            cmap='hot'
+        )
+
+        # Save metadata text file
+        with open(os.path.join(test_dir, 'metrics.txt'), 'w') as f:
+            f.write(f"Test {i + 1} Results\n")
+            f.write(f"Swath Index: {result['swath_idx']}\n")
+            f.write(f"PSNR: {result['psnr']:.3f} dB\n")
+            f.write(f"SSIM: {result['ssim']:.6f}\n")
+            f.write(f"Low Res Shape: {result['low_res'].shape}\n")
+            f.write(f"Enhanced Shape: {result['prediction'].shape}\n")
+            f.write(f"Ground Truth Shape: {result['ground_truth'].shape}\n")
+            f.write(f"Temperature Range - Low: [{np.min(result['low_res']):.1f}, {np.max(result['low_res']):.1f}] K\n")
+            f.write(
+                f"Temperature Range - Enhanced: [{np.min(result['prediction']):.1f}, {np.max(result['prediction']):.1f}] K\n")
+            f.write(
+                f"Temperature Range - Ground Truth: [{np.min(result['ground_truth']):.1f}, {np.max(result['ground_truth']):.1f}] K\n")
+
+        logger.info(f"Saved individual images for test {i + 1} in: {test_dir}")
 
     logger.info(f"\n=== ENHANCED MODEL TEST RESULTS ===")
     logger.info(f"Average PSNR: {avg_psnr:.2f} dB")
     logger.info(f"Average SSIM: {avg_ssim:.4f}")
-    logger.info(f"Visualization: {comparison_path}")
+    logger.info(f"Combined visualization: {comparison_path}")
+    logger.info(f"Individual 1:1 pixel images: {individual_dir}")
     logger.info(f"Arrays: {arrays_path}")
+    logger.info(f"\nEach test has its own folder with:")
+    logger.info(f"  - low_res_HxW.png (exact pixel mapping)")
+    logger.info(f"  - enhanced_HxW.png (exact pixel mapping)")
+    logger.info(f"  - ground_truth_HxW.png (exact pixel mapping)")
+    logger.info(f"  - difference_HxW.png (error map)")
+    logger.info(f"  - metrics.txt (detailed info)")
 
 
 if __name__ == "__main__":
