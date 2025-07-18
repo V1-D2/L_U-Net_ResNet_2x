@@ -1009,9 +1009,12 @@ class EnhancedTrainer:
                         temperature = preprocessor.crop_and_pad_to_target(temperature)
                         temperature = preprocessor.normalize_brightness_temperature(temperature)
 
-                        # Create low-res version
+                        # Create low-res version (same as training)
                         h, w = temperature.shape
-                        low_res = temperature[::2, ::2] + np.random.randn(h // 2, w // 2).astype(np.float32) * 0.01
+                        new_h, new_w = h // 2, w // 2
+                        low_res = temperature[:new_h * 2, :new_w * 2]
+                        low_res = low_res.reshape(new_h, 2, new_w, 2).mean(axis=(1, 3))
+                        low_res = low_res + np.random.randn(new_h, new_w).astype(np.float32) * 0.01
 
                         # Convert to tensors
                         low_res_tensor = torch.from_numpy(low_res).unsqueeze(0).unsqueeze(0).float().to(self.device)
@@ -1097,9 +1100,13 @@ class EnhancedTrainer:
         total_ssim = 0
 
         for i, high_res in enumerate(samples):
-            # Create low-res version
+
+            # Create low-res version (same as training)
             h, w = high_res.shape
-            low_res = high_res[::2, ::2] + np.random.randn(h // 2, w // 2).astype(np.float32) * 0.01
+            new_h, new_w = h // 2, w // 2
+            low_res = high_res[:new_h * 2, :new_w * 2]
+            low_res = low_res.reshape(new_h, 2, new_w, 2).mean(axis=(1, 3))
+            low_res = low_res + np.random.randn(new_h, new_w).astype(np.float32) * 0.01
 
             # Convert to tensors
             low_res_tensor = torch.from_numpy(low_res).unsqueeze(0).unsqueeze(0).float().to(self.device)
