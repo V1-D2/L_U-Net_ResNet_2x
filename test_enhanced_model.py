@@ -133,12 +133,18 @@ def test_enhanced_model():
         temperature = preprocessor.crop_and_pad_to_target(temperature)
         temp_normalized = preprocessor.normalize_brightness_temperature(temperature)
 
-        # Create low-res version (2x downscale)
+        # Create low-res version (2x downscale with averaging)
         h, w = temp_normalized.shape
-        low_res = temp_normalized[::2, ::2]  # Simple 2x downscale
+        degradation_scale = 2
+        new_h, new_w = h // degradation_scale, w // degradation_scale
 
-        # Add noise
-        noise = np.random.randn(*low_res.shape).astype(np.float32) * 0.01
+        # Efficient numpy reshaping for downscaling (same as OptimizedAMSR2Dataset._fast_downscale)
+        low_res = temp_normalized[:new_h * degradation_scale, :new_w * degradation_scale]
+        low_res = low_res.reshape(new_h, degradation_scale,
+                                  new_w, degradation_scale).mean(axis=(1, 3))
+
+        # Add noise (same as training)
+        noise = np.random.randn(new_h, new_w).astype(np.float32) * 0.01
         low_res = low_res + noise
 
         # Convert to tensors
