@@ -276,7 +276,7 @@ def test_model(model_path: str, test_file: str, output_dir: str, device: torch.d
 
     plt.tight_layout()
     zoom_file = os.path.join(output_dir, 'comparison_zoom.png')
-    plt.savefig(zoom_file, dpi=150, bbox_inches='tight')
+    plt.savefig(zoom_file, dpi=300, bbox_inches='tight')
     logger.info(f"Zoomed comparison saved to: {zoom_file}")
     plt.close()
 

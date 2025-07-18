@@ -214,7 +214,7 @@ def test_enhanced_model():
 
     # Save combined results
     comparison_path = os.path.join(output_dir, 'enhanced_test_results.png')
-    plt.savefig(comparison_path, dpi=200, bbox_inches='tight')
+    plt.savefig(comparison_path, dpi=300, bbox_inches='tight')
     plt.close()
 
     # CREATE INDIVIDUAL 1:1 PIXEL IMAGES

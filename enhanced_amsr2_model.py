@@ -1141,7 +1141,7 @@ class EnhancedTrainer:
         plt.tight_layout()
 
         viz_path = os.path.join(save_dir, f'validation_epoch_{epoch + 1}.png')
-        plt.savefig(viz_path, dpi=150, bbox_inches='tight')
+        plt.savefig(viz_path, dpi=300, bbox_inches='tight')
         plt.close()
 
         logger.info(f"Validation - PSNR: {avg_psnr:.1f} dB, SSIM: {avg_ssim:.3f}")
