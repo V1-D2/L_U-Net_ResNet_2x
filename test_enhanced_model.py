@@ -15,6 +15,7 @@ import logging
 
 # Import from enhanced model
 from enhanced_amsr2_model import EnhancedUNetWithAttention, AMSR2DataPreprocessor, MetricsCalculator
+from basicsr.utils import tensor2img, imwrite
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -272,6 +273,19 @@ def test_enhanced_model():
             os.path.join(test_dir, f'difference_{diff.shape[0]}x{diff.shape[1]}.png'),
             cmap='hot'
         )
+
+        # Save BasicSR grayscale versions (same as previous project)
+        sr_tensor_basicsr = torch.from_numpy((result['prediction'] - 200) / 150).unsqueeze(0).unsqueeze(0).float()
+        low_res_tensor_basicsr = torch.from_numpy((result['low_res'] - 200) / 150).unsqueeze(0).unsqueeze(0).float()
+        gt_tensor_basicsr = torch.from_numpy((result['ground_truth'] - 200) / 150).unsqueeze(0).unsqueeze(0).float()
+
+        sr_img_basicsr = tensor2img([sr_tensor_basicsr])
+        low_res_img_basicsr = tensor2img([low_res_tensor_basicsr])
+        gt_img_basicsr = tensor2img([gt_tensor_basicsr])
+
+        imwrite(sr_img_basicsr, os.path.join(test_dir, 'enhanced_basicsr.png'))
+        imwrite(low_res_img_basicsr, os.path.join(test_dir, 'low_res_basicsr.png'))
+        imwrite(gt_img_basicsr, os.path.join(test_dir, 'ground_truth_basicsr.png'))
 
         # Save metadata text file
         with open(os.path.join(test_dir, 'metrics.txt'), 'w') as f:
