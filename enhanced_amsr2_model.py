@@ -1204,7 +1204,7 @@ def main():
                         help='Target width (default: 208)')
 
     # Output
-    parser.add_argument('--save-dir', type=str, default='./models_enhanced',
+    parser.add_argument('--save-dir', type=str, default='./models_enhanced_2nd_generation',
                         help='Directory to save models and results')
     parser.add_argument('--validate-every', type=int, default=5,
                         help='Validate every N epochs')

@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=amsr2_enhanced_attention
+#SBATCH --job-name=C_amsr2_enhanced_attention
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err
 #SBATCH --partition=salvador
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:turing:1
 #SBATCH --cpus-per-gpu=12
 #SBATCH --mem-per-gpu=64G
 #SBATCH --time=72:00:00
@@ -95,7 +95,7 @@ apptainer exec --nv \
     --batch-size 8 \
     --num-workers 4 \
     --files-per-batch 5 \
-    --max-swaths-per-file 1000 \
+    --max-swaths-per-file 500 \
     --gradient-accumulation 4 \
     --lr 5e-5 \
     --save-dir ./models_enhanced \
