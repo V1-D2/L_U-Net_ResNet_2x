@@ -3,9 +3,10 @@
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err
 #SBATCH --partition=salvador
+#SBATCH --nodelist=r740-105-15
 #SBATCH --gres=gpu:turing:1
 #SBATCH --cpus-per-gpu=12
-#SBATCH --mem-per-gpu=64G
+#SBATCH --mem-per-gpu=32G
 #SBATCH --time=72:00:00
 
 echo "============================================"
