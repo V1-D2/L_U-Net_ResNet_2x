@@ -79,7 +79,7 @@ apptainer exec --nv \
     --max-swaths-per-file 500 \
     --gradient-accumulation 4 \
     --lr 1e-4 \
-    --save-dir ./models_enhanced \
+    --save-dir ./models_enhanced_2nd_generation \
     --validate-every 2 \
     --target-height 2048 \
     --target-width 208 \
