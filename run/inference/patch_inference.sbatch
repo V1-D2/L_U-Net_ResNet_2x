@@ -86,11 +86,9 @@ echo "Processing 20 samples from last NPZ file"
 echo "Using 75% overlap with Gaussian blending"
 echo "============================================"
 
-# Run with the larger dataset (500_split)
 apptainer exec --nv \
     --bind $HOME/local-python:$HOME/.local \
     --bind /home/vdidur/L_U-Net_ResNet_2x:/workspace \
-#    --bind /scratch/tmp/vdidur/500_split:/data:ro \
     --bind /home/vdidur/temperature_sr_project/data:/data:ro \
     --env PYTHONPATH=/workspace:$PYTHONPATH \
     --env OMP_NUM_THREADS=4 \
@@ -100,7 +98,7 @@ apptainer exec --nv \
     --npz-dir /data \
     --model-path $MODEL_PATH \
     --num-samples 20 \
-    --save-dir ./patch_inference_results \
+    --save-dir ./patch_inference_results_alt \
     --overlap-ratio 0.75
 
 # Check if inference was successful
