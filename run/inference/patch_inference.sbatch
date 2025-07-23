@@ -90,7 +90,8 @@ echo "============================================"
 apptainer exec --nv \
     --bind $HOME/local-python:$HOME/.local \
     --bind /home/vdidur/L_U-Net_ResNet_2x:/workspace \
-    --bind /scratch/tmp/vdidur/500_split:/data:ro \
+#    --bind /scratch/tmp/vdidur/500_split:/data:ro \
+    --bind /home/vdidur/temperature_sr_project/data:/data:ro \
     --env PYTHONPATH=/workspace:$PYTHONPATH \
     --env OMP_NUM_THREADS=4 \
     --workdir /workspace \
