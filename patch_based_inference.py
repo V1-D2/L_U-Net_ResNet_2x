@@ -426,7 +426,6 @@ def save_results(results: List[Dict], save_dir: str):
             super_resolution=result['super_resolution'],
             low_resolution=result['low_resolution'],
             temperature_stats=result['temperature_stats'],
-            metrics=result['metrics'],
             metadata=result['metadata']
         )
 
