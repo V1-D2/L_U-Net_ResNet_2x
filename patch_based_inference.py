@@ -437,9 +437,9 @@ def save_results(results: List[Dict], save_dir: str):
         save_temperature_image(result['low_resolution'],
                                os.path.join(images_dir, f'sample_{i + 1:03d}_lr.png'))
 
-        # Add bicubic baseline
-        h, w = result['low_resolution'].shape
-        bicubic = cv2.resize(result['low_resolution'], (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+        # Add bicubic baseline from ORIGINAL
+        h, w = result['original'].shape
+        bicubic = cv2.resize(result['original'], (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
         save_temperature_image(bicubic,
                                os.path.join(images_dir, f'sample_{i + 1:03d}_bicubic.png'))
 
@@ -525,9 +525,9 @@ def create_comparison_plot(result: Dict, sample_id: int, save_dir: str):
     axes[0, 1].axis('off')
     plt.colorbar(im2, ax=axes[0, 1], fraction=0.046)
 
-    # Bicubic baseline
-    h, w = result['low_resolution'].shape
-    bicubic = cv2.resize(result['low_resolution'], (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+    # Bicubic baseline from ORIGINAL
+    h, w = result['original'].shape
+    bicubic = cv2.resize(result['original'], (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
     im3 = axes[0, 2].imshow(bicubic, cmap='turbo', aspect='auto')
     axes[0, 2].set_title(f'Bicubic Baseline\n{bicubic.shape}')
     axes[0, 2].axis('off')
