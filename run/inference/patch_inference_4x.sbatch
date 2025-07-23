@@ -101,7 +101,7 @@ apptainer exec --nv \
     --model-path $MODEL_PATH \
     --num-samples 5 \
     --save-dir ./cascaded_results \
-    --overlap-ratio 0.75
+    --overlap-ratio 0.25
 
 # Check if inference was successful
 if [ $? -eq 0 ]; then
