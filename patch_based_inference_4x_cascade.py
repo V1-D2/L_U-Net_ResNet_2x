@@ -166,7 +166,7 @@ class PatchBasedSuperResolution:
 
     def patch_based_super_resolution(self, image: np.ndarray,
                                      patch_size: Tuple[int, int] = (1024, 104),
-                                     overlap_ratio: float = 0.75,
+                                     overlap_ratio: float = 0.25,
                                      stage_name: str = "Stage") -> Tuple[np.ndarray, Dict[str, float]]:
         """
         Apply super-resolution using patch-based approach with weighted blending
@@ -377,7 +377,7 @@ def cascaded_super_resolution_4x(npz_dir: str, model_path: str, num_samples: int
                 sr_4x_normalized, stats_4x = patch_processor.patch_based_super_resolution(
                     sr_2x_normalized,  # Use the 2x result as input
                     patch_size=(1024, 104),
-                    overlap_ratio=0.75,
+                    overlap_ratio=0.2,
                     stage_name="Stage 2 (4x total)"
                 )
 
