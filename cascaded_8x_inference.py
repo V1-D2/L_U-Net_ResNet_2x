@@ -520,9 +520,23 @@ def save_variant_results(results: List[Dict], save_dir: str, variant: str):
                                os.path.join(images_dir, f'sample_{i + 1:03d}_bicubic_8x.png'))
 
         # Save grayscale versions
-        orig_tensor = torch.from_numpy((result['original'] - 200) / 150).unsqueeze(0).unsqueeze(0).float()
-        sr_8x_tensor = torch.from_numpy((sr_8x - 200) / 150).unsqueeze(0).unsqueeze(0).float()
-        bicubic_8x_tensor = torch.from_numpy((result['bicubic_8x'] - 200) / 150).unsqueeze(0).unsqueeze(0).float()
+        # Percentile normalization для grayscale
+        p_low, p_high = 1, 99
+        temp_min, temp_max = np.percentile(result['original'], [p_low, p_high])
+
+        # Нормализация с percentile
+        def normalize_with_percentile(data):
+            data_clipped = np.clip(data, temp_min, temp_max)
+            return (data_clipped - temp_min) / (temp_max - temp_min)
+
+        orig_norm = normalize_with_percentile(result['original'])
+        sr_8x_norm = normalize_with_percentile(sr_8x)
+        bicubic_8x_norm = normalize_with_percentile(result['bicubic_8x'])
+
+        # Convert to tensors
+        orig_tensor = torch.from_numpy(orig_norm).unsqueeze(0).unsqueeze(0).float()
+        sr_8x_tensor = torch.from_numpy(sr_8x_norm).unsqueeze(0).unsqueeze(0).float()
+        bicubic_8x_tensor = torch.from_numpy(bicubic_8x_norm).unsqueeze(0).unsqueeze(0).float()
 
         orig_img = tensor2img([orig_tensor])
         sr_8x_img = tensor2img([sr_8x_tensor])
@@ -535,7 +549,21 @@ def save_variant_results(results: List[Dict], save_dir: str, variant: str):
 
 def save_temperature_image(temperature: np.ndarray, save_path: str, dpi: int = 100):
     """Save temperature array as image with exact pixel mapping"""
-    plt.imsave(save_path, temperature, cmap='turbo', origin='upper')
+    import matplotlib.cm as cm
+    from PIL import Image
+
+    # Используем percentile normalization
+    p_low, p_high = 1, 99
+    temp_min, temp_max = np.percentile(temperature, [p_low, p_high])
+    temperature_clipped = np.clip(temperature, temp_min, temp_max)
+    temp_norm = (temperature_clipped - temp_min) / (temp_max - temp_min)
+
+    # Apply turbo colormap
+    turbo_cmap = cm.get_cmap('turbo')
+    turbo_rgb = (turbo_cmap(temp_norm)[:, :, :3] * 255).astype(np.uint8)
+
+    # Save as PNG
+    Image.fromarray(turbo_rgb).save(save_path)
 
 
 def create_8x_comparison(results: List[Dict], save_dir: str):
