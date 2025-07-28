@@ -81,7 +81,7 @@ echo "Looking for trained models..."
 echo "============================================"
 
 # Find the latest model checkpoint
-MODEL_DIR="$PROJECT_DIR/models_enhanced_2nd_generation"
+MODEL_DIR="$PROJECT_DIR/models_enhanced"
 if [ -d "$MODEL_DIR" ]; then
     echo "Checking model directory: $MODEL_DIR"
     ls -la $MODEL_DIR/best_model.pth 2>/dev/null || echo "No best_model.pth found yet"
