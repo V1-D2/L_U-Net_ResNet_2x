@@ -382,7 +382,7 @@ def main():
 
     # Configuration - UPDATE THESE PATHS
     NPZ_DIR = "/home/vdidur/temperature_sr_project/data"
-    MODEL_PATH = "./models_enhanced_2nd_generation/best_model.pth"  # Update with actual path
+    MODEL_PATH = "./models_enhanced/best_model.pth"  # Update with actual path
     NUM_SAMPLES = 500
     SAVE_DIR = "./test_enhanced_results"
 
