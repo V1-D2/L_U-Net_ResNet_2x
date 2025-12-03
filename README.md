@@ -23,6 +23,15 @@ Passive microwave satellite observations provide critical data for climate monit
 - **Patch-Based Processing**: Gaussian-weighted blending for seamless reconstruction of arbitrary-sized inputs
 
 ---
+## Results
+### Lightweight U-Net ResNet 8× Super-Resolution Comparison
+
+|               | Original (LR)                                 | Bicubic 8×                                    | L-U-Net ResNet 8×                           |
+|--------------|-----------------------------------------------|-----------------------------------------------|---------------------------------------------|
+| **Grayscale**| ![](images/sample_004_original_gray.png)      | ![](images/sample_004_bicubic_8x_gray.png)    | ![](images/sample_004_sr_8x_gray.png)       |
+| **Color**    | ![](images/sample_004_original.png)           | ![](images/sample_004_bicubic_8x.png)         | ![](images/sample_004_sr_8x.png)            |
+
+---
 
 ## Architecture
 
